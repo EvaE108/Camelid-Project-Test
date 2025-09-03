@@ -1,7 +1,7 @@
 import { Model } from "./models.js";
 
 // Keep this empty for now so the loader won't try to fetch any GLB files.
-const bonesList = [];
+let bonesList = [];
 
 export default new Model(
   "Camelid",
