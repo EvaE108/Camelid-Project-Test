@@ -2,9 +2,8 @@
 var model_list = [
     "Canine",
     "Equine",
-    // "Daniel"
-    "Bovine",
     "Camelid",
+    "Bovine",
 ];
 
 // Ok, that's all you have to do here
