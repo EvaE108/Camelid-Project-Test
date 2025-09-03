@@ -2,7 +2,7 @@
 var model_list = [
     "Canine",
     "Equine",
-    //"Camelid",
+    "Camelid",
     "Bovine",
 ];
 
