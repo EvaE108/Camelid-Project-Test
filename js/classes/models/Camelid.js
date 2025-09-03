@@ -1,13 +1,13 @@
-// Camelid.js
 import { Model } from "./models.js";
 
-// keep the same bonesList as Canine (you can leave the big list exactly as is)
+// Keep this empty for now so the loader won't try to fetch any GLB files.
+const bonesList = [];
 
 export default new Model(
-  "Camelid",            // <- name shown in-app and used for model folder
-   bonesList,            // same list as Canine
-  0.032,                // same scale
-  [0, 8, 0],            // same center
-  "Camelid Model",      // label under the button
-  "/img/models/preview/canine.png" // (you can reuse the canine image for now)
+  "Camelid",
+  bonesList,
+  0.032,
+  [0, 8, 0],
+  "Camelid Model",
+  "/img/models/preview/camelid.png"
 );
