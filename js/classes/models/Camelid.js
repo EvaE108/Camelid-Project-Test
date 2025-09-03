@@ -9,5 +9,5 @@ export default new Model(
   0.032,                // same scale
   [0, 8, 0],            // same center
   "Camelid Model",      // label under the button
-  "/img/models/preview/camelid.png" // (you can reuse the canine image for now)
+  "/img/models/preview/canine.png" // (you can reuse the canine image for now)
 );
