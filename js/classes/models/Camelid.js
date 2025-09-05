@@ -1,12 +1,14 @@
 import {Model} from "./models.js";
 
-let bonesList = ["potato"];
+let bonesList = [
+    "potato"
+];
 
 export default new Model(
     "Camelid",
     bonesList,
-    .032,
-    [0, 8, 0],
-    "Camelid Model",
-    "/img/models/preview/camelid.png"
+    11,
+    [0, 10, -1],
+    "This is a model of Camelid",
+    "/img/models/preview/Camelid.png"
 );
