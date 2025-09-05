@@ -476,14 +476,26 @@ async function init() {
             model_container[parsed_name] = mc;
 
             // Get the mesh
-            let mesh;
-            object.traverse( function(object) {
-                if(object.type == 'Mesh' && !object.material.transparent){
-                    mesh = object;
-                }
-            });
+            // Find a mesh (even if transparent) and make sure it's visible/clickable
+let mesh;
+object.traverse((o) => {
+  if (!mesh && o.isMesh) {
+    if (Array.isArray(o.material)) {
+      o.material.forEach(m => { if (m) { m.transparent = false; m.opacity = 1; } });
+    } else if (o.material) {
+      o.material.transparent = false;
+      o.material.opacity = 1;
+    }
+    o.visible = true;
+    mesh = o;
+  }
+});
 
-            addModelComponent(parsed_name, mesh);
+// Fallback: if no single mesh was found, use the whole object
+if (!mesh) mesh = object;
+
+addModelComponent(parsed_name, mesh);
+
 
             bone = new THREE.Group();
             bone.name = parsed_name;
