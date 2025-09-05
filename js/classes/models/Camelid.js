@@ -1,6 +1,6 @@
 import {Model} from "./models.js";
 
-let bonesList = ['Potato/Potato',
+let bonesList = ['Placeholders/potato',
                ];
 
 export default new Model(
