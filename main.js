@@ -256,56 +256,36 @@ function selectBone(clicked_bone, clicked_canvas) {
     SELECTED = true;
 
     $('#hide-toggle').removeClass('sidebar-button-active');
-// Find the top-level group under the Root/Scene regardless of depth
-let bone_group = clicked_bone; // default to the mesh itself
-if (clicked_bone && clicked_bone.traverseAncestors) {
-  clicked_bone.traverseAncestors(function (curr) {
-    if (
-      curr &&
-      curr.parent &&
-      (curr.parent.name === "Root" || curr.parent.type === "Scene")
-    ) {
-      bone_group = curr;
-    }
-  });
+
+    let bone_group = clicked_bone.parent.parent.parent.parent;
+    clicked_bone.traverseAncestors(function(curr){
+        if(curr.type != "Scene" && curr.parent.type == "Scene"){
+            bone_group = curr;
+        }
+    });
+
+    SELECTED_BONES = bone_group;
+    let debug_str = "Selected the " + bone_group.name + " by " + (clicked_canvas ? "clicking" : "list selection");
+
+    console.log(debug_str);
+
+    INTERSECTED = bone_group.name;
+    INTERSECTED_BONES = bone_group;
+    $("#selected").text(INTERSECTED);
+
+    // Scroll into view if we clicked the canvas
+    setBoneListComponentActive(INTERSECTED, clicked_canvas);
+
+    // Changed from always selected to browsing
+    $("#selected-info").text("Selected:");
+
+    // If it is hidden show this
+    if (clicked_bone.material.transparent)
+        $('#hide-toggle').addClass('sidebar-button-active');
+
+    // Callback
+    onSelectedBone();
 }
-// Fallback for very shallow hierarchies
-if (!bone_group || !bone_group.name) {
-  bone_group = clicked_bone.parent || clicked_bone;
-}
-
-SELECTED_BONES = bone_group;
-let debug_str =
-  "Selected the " +
-  (bone_group.name || "(unnamed)") +
-  " by " +
-  (clicked_canvas ? "clicking" : "list selection");
-console.log(debug_str);
-
-INTERSECTED = bone_group.name;
-INTERSECTED_BONES = bone_group;
-$("#selected").text(INTERSECTED);
-
-// Scroll into view if we clicked the canvas
-setBoneListComponentActive(INTERSECTED, clicked_canvas);
-
-// Changed from always selected to browsing
-$("#selected-info").text("Selected:");
-
-// If it is hidden show this (support single or array materials)
-const isTransparent =
-  clicked_bone.material &&
-  (Array.isArray(clicked_bone.material)
-    ? clicked_bone.material.some((m) => m && m.transparent)
-    : clicked_bone.material.transparent);
-
-if (isTransparent) {
-  $("#hide-toggle").addClass("sidebar-button-active");
-}
-
-// Callback
-onSelectedBone();
-
 
 // List of bones
 // Will allow user to click on a specific bone from the bones list
