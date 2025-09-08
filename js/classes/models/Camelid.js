@@ -1,8 +1,6 @@
 import {Model} from "./models.js";
 
-let bonesList = ['potato',
-                'burger',
-                ];
+let bonesList = ['Skull'];
 
 export default new Model(
     "Camelid",
