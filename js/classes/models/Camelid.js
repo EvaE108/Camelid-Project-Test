@@ -2,7 +2,7 @@ import {Model} from "./models.js";
 
 let bonesList = [
     'Parts/Skull',
-    'Parts/potato',
+    'Parts/Small_Intestines',
 ];
 
 export default new Model(
