@@ -1046,7 +1046,9 @@ let __showingStomachOnly = false;
 // Add any aliases your meshes might use (case-insensitive).
 // If your Camelid stomach uses specific names later, add them here.
 const STOMACH_ALIASES = [
-  'stomach', 'gastric', 'rumen', 'reticulum', 'omasum', 'abomasum', 'small intestine', 'intestine'
+  'stomach',
+  'small_intestine', 'small intestine', 'intestine', // if you want it to match intestines too
+  'gastric', 'rumen', 'reticulum', 'omasum', 'abomasum' // ruminant options if needed
 ];
 
 function nameLooksLikeStomach(name) {
