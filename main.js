@@ -1043,79 +1043,71 @@ function onClickHide() {
 // ===== Change View: Full Model <-> Stomach Only =====
 let __showingStomachOnly = false;
 
-// Add any aliases your meshes might use (case-insensitive).
-// If your Camelid stomach uses specific names later, add them here.
-const STOMACH_ALIASES = [
-  'stomach',
-  'small_intestine', 'small intestine', 'intestine', // if you want it to match intestines too
-  'gastric', 'rumen', 'reticulum', 'omasum', 'abomasum' // ruminant options if needed
-];
+// Keep aliases minimal unless you want intestines too.
+const STOMACH_ALIASES = ['stomach'];
 
 function nameLooksLikeStomach(name) {
   const n = (name || '').toLowerCase();
-  return STOMACH_ALIASES.some(a => n === a || n.includes(a));
+  return STOMACH_ALIASES.some(a => n.includes(a));
 }
 
-// Traverse and set materials similar to your Hide/Show logic
+// Set transparency/opacity on all meshes under a node
 function setMaterialStateDeep(rootObj, transparent, opacity) {
-  rootObj.parent?.traverse(function (object) {
-    if (object.type === 'Mesh') {
-      if (Array.isArray(object.material)) {
-        object.material.forEach(m => {
-          if (m) {
-            m.transparent = transparent;
-            if (typeof opacity === 'number') m.opacity = opacity;
-          }
-        });
-      } else if (object.material) {
-        object.material.transparent = transparent;
-        if (typeof opacity === 'number') object.material.opacity = opacity;
-      }
+  if (!rootObj) return;
+  rootObj.traverse((object) => {
+    if (object.isMesh) {
+      const apply = (m) => {
+        if (!m) return;
+        m.transparent = !!transparent;
+        if (typeof opacity === 'number') m.opacity = opacity;
+        m.needsUpdate = true;
+      };
+      if (Array.isArray(object.material)) object.material.forEach(apply);
+      else apply(object.material);
     }
   });
 }
 
-// Make everything faint except the stomach branch(es)
+// Show/hide an object and all its children
+function setVisibleDeep(rootObj, vis) {
+  if (!rootObj) return;
+  rootObj.traverse(o => { o.visible = vis; });
+}
+
 function showStomachOnly() {
-  // If no models yet, bail gracefully
-  if (!model_container || Object.keys(model_container).length === 0) return;
+  if (!model_container || Object.keys(model_container).length === 0) return false;
 
-  let foundAny = false;
+  const allKeys = Object.keys(model_container);
+  const stomachKeys = allKeys.filter(nameLooksLikeStomach);
 
-  // First, faint all parts
-  for (const key in model_container) {
-    const comp = model_container[key];
-    if (!comp || !comp.object) continue;
-    setMaterialStateDeep(comp.object, true, 0.1); // faint others
-  }
-
-  // Then, punch up stomach/intestine parts
-  for (const key in model_container) {
-    if (nameLooksLikeStomach(key)) {
-      const comp = model_container[key];
-      if (!comp || !comp.object) continue;
-      foundAny = true;
-      setMaterialStateDeep(comp.object, false, 1.0); // full opacity
-    }
-  }
-
-  // If we didn’t find any stomach-like names, undo and notify
-  if (!foundAny) {
-    // Restore full model
+  if (stomachKeys.length === 0) {
     onClickShowAll();
     const log = document.getElementById('log');
-    if (log) log.textContent = 'Stomach not found yet — add its name to STOMACH_ALIASES or check the model list.';
+    if (log) log.textContent = 'Stomach not found — check Camelid.js names/aliases.';
     return false;
   }
+
+  // Hide ALL parts
+  allKeys.forEach((key) => {
+    const comp = model_container[key];
+    if (comp && comp.object) setVisibleDeep(comp.object, false);
+  });
+
+  // Show ONLY the stomach parts + ensure full opacity
+  stomachKeys.forEach((key) => {
+    const comp = model_container[key];
+    if (comp && comp.object) {
+      setVisibleDeep(comp.object, true);
+      setMaterialStateDeep(comp.object, false, 1.0);
+    }
+  });
 
   return true;
 }
 
 function onClickChangeView(e) {
   if (e && e.preventDefault) e.preventDefault();
-
-  // Don’t conflict with Focus mode
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return;
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
 
   if (!__showingStomachOnly) {
     const ok = showStomachOnly();
@@ -1124,11 +1116,19 @@ function onClickChangeView(e) {
       $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
     }
   } else {
-    onClickShowAll(); // reuse your existing reset
+    // Restore ALL parts visible
+    Object.keys(model_container).forEach((key) => {
+      const comp = model_container[key];
+      if (comp && comp.object) setVisibleDeep(comp.object, true);
+    });
+    // Use your existing reset to restore transparencies, selections, etc.
+    onClickShowAll();
+
     __showingStomachOnly = false;
     $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
   }
 }
+
 
 function onClickShowAll() {
 
