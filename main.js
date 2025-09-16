@@ -1,4 +1,3 @@
-
 // For static loading (comment out for dynamic loading and make sure up to date)
 import  * as THREE from './js/modules/three.js';
 import { OrbitControls } from './js/modules/OrbitControls.js';
@@ -1009,131 +1008,114 @@ function onClickFocus() {
     if (IN_XR || DEMO_XR_IN_WEB)
         xr_controls_ui.focus.update();
 }
+function onClickHide() {
+
+    // Don't work if focus mode
+    if (FOCUS_MODE)
+        return;
+
+    if(SELECTED) {
+        let mesh = getMeshFromBoneGroup(SELECTED_BONES);
+
+        mesh.material.transparent = !mesh.material.transparent;
+
+        if (mesh.material.opacity == 1.0)
+            mesh.material.opacity = .2;
+        else
+            mesh.material.opacity = 1.0;
+
+        // Also now show the hide icon
+        model_components.forEach(c=>{
+            if (c.getElementsByTagName("span")[0].innerText == SELECTED_BONES.name) {
+                c.getElementsByTagName("div")[0].classList.toggle("eye-closed");
+                return;
+            }
+        });
+
+        $('#hide-toggle').toggleClass('sidebar-button-active');
+    }
+
+    if (IN_XR || DEMO_XR_IN_WEB)
+        xr_controls_ui.hide.update();
+
+}
+
 // ===== Change View: Full Model <-> Stomach Only =====
 let __showingStomachOnly = false;
 
-// Minimal alias; you said the GLB/root is literally named "stomach"
-const STOMACH_ALIASES = ['stomach'];
+// Add any aliases your meshes might use (case-insensitive).
+// If your Camelid stomach uses specific names later, add them here.
+const STOMACH_ALIASES = [
+  'stomach',
+  'small_intestine', 'small intestine', 'intestine', // if you want it to match intestines too
+  'gastric', 'rumen', 'reticulum', 'omasum', 'abomasum' // ruminant options if needed
+];
 
 function nameLooksLikeStomach(name) {
   const n = (name || '').toLowerCase();
-  return STOMACH_ALIASES.some(a => n.includes(a));
+  return STOMACH_ALIASES.some(a => n === a || n.includes(a));
 }
 
-// ---- Deep helpers ----
+// Traverse and set materials similar to your Hide/Show logic
 function setMaterialStateDeep(rootObj, transparent, opacity) {
-  if (!rootObj) return;
-  rootObj.traverse((object) => {
-    if (object.isMesh) {
-      const mats = Array.isArray(object.material) ? object.material : [object.material];
-      mats.forEach((m) => {
-        if (!m) return;
-        m.transparent = !!transparent;
-        if (typeof opacity === 'number') m.opacity = opacity;
-        // extra safety so it actually renders
-        m.depthWrite = true;
-        m.depthTest = true;
-        m.colorWrite = true;
-        m.alphaTest = 0;
-        m.side = THREE.DoubleSide;
-        if (m.clippingPlanes && m.clippingPlanes.length) m.clippingPlanes = [];
-        m.needsUpdate = true;
-      });
-    }
-  });
-}
-
-function setVisibleDeep(rootObj, vis) {
-  if (!rootObj) return;
-  // also enable parents + sane defaults to avoid invisible-but-present issues
-  let p = rootObj;
-  while (p) { p.visible = true; p = p.parent; }
-  rootObj.traverse(o => {
-    o.visible = vis;
-    if (vis) {
-      o.layers?.enable?.(0);       // default camera layer
-      o.frustumCulled = false;     // avoid culling surprises
-      if (o.scale && (o.scale.x === 0 || o.scale.y === 0 || o.scale.z === 0)) {
-        o.scale.set(1,1,1);
+  rootObj.parent?.traverse(function (object) {
+    if (object.type === 'Mesh') {
+      if (Array.isArray(object.material)) {
+        object.material.forEach(m => {
+          if (m) {
+            m.transparent = transparent;
+            if (typeof opacity === 'number') m.opacity = opacity;
+          }
+        });
+      } else if (object.material) {
+        object.material.transparent = transparent;
+        if (typeof opacity === 'number') object.material.opacity = opacity;
       }
     }
   });
 }
 
-// ---- Find the stomach reliably ----
-// 1) Try model_container keys
-// 2) If not found, search ALL objects in the scene case-insensitively for name === "stomach"
-function resolveStomachObjects() {
-  const found = [];
-
-  if (model_container && Object.keys(model_container).length) {
-    Object.keys(model_container).forEach((key) => {
-      if (nameLooksLikeStomach(key)) {
-        const comp = model_container[key];
-        if (comp && comp.object) found.push(comp.object);
-      }
-    });
-  }
-
-  if (found.length === 0 && typeof scene !== 'undefined' && scene) {
-    // exact-case-insensitive match first
-    let exact = null;
-    scene.traverse(o => {
-      if (!exact && o.name && o.name.toLowerCase() === 'stomach') exact = o;
-    });
-    if (exact) found.push(exact);
-    else {
-      // fallback: any node containing "stomach"
-      scene.traverse(o => {
-        if (o.name && o.name.toLowerCase().includes('stomach')) found.push(o);
-      });
-    }
-  }
-  return found;
-}
-
+// Make everything faint except the stomach branch(es)
 function showStomachOnly() {
-  if (!model_container || Object.keys(model_container).length === 0) {
-    // still try scene-based discovery
-    const alts = resolveStomachObjects();
-    if (alts.length === 0) return false;
+  // If no models yet, bail gracefully
+  if (!model_container || Object.keys(model_container).length === 0) return;
+
+  let foundAny = false;
+
+  // First, faint all parts
+  for (const key in model_container) {
+    const comp = model_container[key];
+    if (!comp || !comp.object) continue;
+    setMaterialStateDeep(comp.object, true, 0.1); // faint others
   }
 
-  const stomachObjs = resolveStomachObjects();
-  if (stomachObjs.length === 0) {
+  // Then, punch up stomach/intestine parts
+  for (const key in model_container) {
+    if (nameLooksLikeStomach(key)) {
+      const comp = model_container[key];
+      if (!comp || !comp.object) continue;
+      foundAny = true;
+      setMaterialStateDeep(comp.object, false, 1.0); // full opacity
+    }
+  }
+
+  // If we didn’t find any stomach-like names, undo and notify
+  if (!foundAny) {
+    // Restore full model
     onClickShowAll();
     const log = document.getElementById('log');
-    if (log) log.textContent = 'Stomach not found — ensure the GLB (or its root node) is named "stomach".';
+    if (log) log.textContent = 'Stomach not found yet — add its name to STOMACH_ALIASES or check the model list.';
     return false;
   }
-
-  // Hide ALL parts we know about
-  Object.keys(model_container).forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) setVisibleDeep(comp.object, false);
-  });
-
-  // Also try to hide any other top-level children if your app uses `scene` directly
-  if (typeof scene !== 'undefined' && scene) {
-    scene.children.forEach(ch => {
-      // don't hide lights/camera/helpers
-      if (ch.isLight || ch.isCamera) return;
-      if (!stomachObjs.includes(ch)) setVisibleDeep(ch, false);
-    });
-  }
-
-  // Show ONLY stomach objects (force solid/opaque)
-  stomachObjs.forEach((obj) => {
-    setVisibleDeep(obj, true);
-    setMaterialStateDeep(obj, false, 1.0);
-  });
 
   return true;
 }
 
 function onClickChangeView(e) {
   if (e && e.preventDefault) e.preventDefault();
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
+
+  // Don’t conflict with Focus mode
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return;
 
   if (!__showingStomachOnly) {
     const ok = showStomachOnly();
@@ -1142,47 +1124,40 @@ function onClickChangeView(e) {
       $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
     }
   } else {
-    // Restore ALL parts visible
-    Object.keys(model_container).forEach((key) => {
-      const comp = model_container[key];
-      if (comp && comp.object) setVisibleDeep(comp.object, true);
-    });
-    onClickShowAll();
-
+    onClickShowAll(); // reuse your existing reset
     __showingStomachOnly = false;
     $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
   }
 }
 
 function onClickShowAll() {
-  // Check if we are hiding
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) {
-    return;
-  } else if (typeof SELECTED_BONES !== 'undefined' && SELECTED_BONES) {
-    let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
-    if (current_mesh.material.transparent) {
-      onClickHide();
+
+    // Check if we are hiding
+    if (FOCUS_MODE) {
+        return;
     }
-  }
+    else if (SELECTED_BONES) {
+        let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
 
-  for (const model in model_container) {
-    model_container[model].object.parent.traverse(function (object) {
-      if (object.type === 'Mesh') {
-        object.material.transparent = false;
-        object.material.opacity = 1.0;
-        object.visible = true;
-      }
-    });
-  }
+        if (current_mesh.material.transparent) {
+            onClickHide();
+        }
+    }
 
-  // Clear the bones list hiddens
-  if (typeof model_components !== 'undefined') {
-    model_components.forEach(c => {
-      c.getElementsByTagName("div")[0].classList.remove("eye-closed");
-    });
-  }
-  $('#focus-toggle').removeClass('sidebar-button-active');
-  $('#hide-toggle').removeClass('sidebar-button-active');
+    for(const model in model_container){
+        model_container[model].object.parent.traverse( function(object) {
+            if(object.type == 'Mesh'){
+                object.material.transparent = false;
+            }
+        });
+    }
+
+    // Also now clear the bones list hiddens
+    model_components.forEach(c=>{
+        c.getElementsByTagName("div")[0].classList.remove("eye-closed");
+    })
+    $('#focus-toggle').removeClass('sidebar-button-active');
+    $('#hide-toggle').removeClass('sidebar-button-active');
 }
 
 // GUI Web Controls (unused for now, may do later)
