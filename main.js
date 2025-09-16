@@ -1008,43 +1008,9 @@ function onClickFocus() {
     if (IN_XR || DEMO_XR_IN_WEB)
         xr_controls_ui.focus.update();
 }
-
-function onClickHide() {
-
-    // Don't work if focus mode
-    if (FOCUS_MODE)
-        return;
-
-    if(SELECTED) {
-        let mesh = getMeshFromBoneGroup(SELECTED_BONES);
-
-        mesh.material.transparent = !mesh.material.transparent;
-
-        if (mesh.material.opacity == 1.0)
-            mesh.material.opacity = .2;
-        else
-            mesh.material.opacity = 1.0;
-
-        // Also now show the hide icon
-        model_components.forEach(c=>{
-            if (c.getElementsByTagName("span")[0].innerText == SELECTED_BONES.name) {
-                c.getElementsByTagName("div")[0].classList.toggle("eye-closed");
-                return;
-            }
-        });
-
-        $('#hide-toggle').toggleClass('sidebar-button-active');
-    }
-
-    if (IN_XR || DEMO_XR_IN_WEB)
-        xr_controls_ui.hide.update();
-
-}
-
 // ===== Change View: Full Model <-> Stomach Only =====
 let __showingStomachOnly = false;
 
-// Keep aliases minimal unless you want intestines too.
 // Minimal alias; you said the GLB/root is literally named "stomach"
 const STOMACH_ALIASES = ['stomach'];
 
@@ -1053,13 +1019,11 @@ function nameLooksLikeStomach(name) {
   return STOMACH_ALIASES.some(a => n.includes(a));
 }
 
-// Set transparency/opacity on all meshes under a node
 // ---- Deep helpers ----
 function setMaterialStateDeep(rootObj, transparent, opacity) {
   if (!rootObj) return;
   rootObj.traverse((object) => {
     if (object.isMesh) {
-      const apply = (m) => {
       const mats = Array.isArray(object.material) ? object.material : [object.material];
       mats.forEach((m) => {
         if (!m) return;
@@ -1073,18 +1037,13 @@ function setMaterialStateDeep(rootObj, transparent, opacity) {
         m.side = THREE.DoubleSide;
         if (m.clippingPlanes && m.clippingPlanes.length) m.clippingPlanes = [];
         m.needsUpdate = true;
-      };
-      if (Array.isArray(object.material)) object.material.forEach(apply);
-      else apply(object.material);
       });
     }
   });
 }
 
-// Show/hide an object and all its children
 function setVisibleDeep(rootObj, vis) {
   if (!rootObj) return;
-  rootObj.traverse(o => { o.visible = vis; });
   // also enable parents + sane defaults to avoid invisible-but-present issues
   let p = rootObj;
   while (p) { p.visible = true; p = p.parent; }
@@ -1100,8 +1059,6 @@ function setVisibleDeep(rootObj, vis) {
   });
 }
 
-function showStomachOnly() {
-  if (!model_container || Object.keys(model_container).length === 0) return false;
 // ---- Find the stomach reliably ----
 // 1) Try model_container keys
 // 2) If not found, search ALL objects in the scene case-insensitively for name === "stomach"
@@ -1134,8 +1091,6 @@ function resolveStomachObjects() {
   return found;
 }
 
-  const allKeys = Object.keys(model_container);
-  const stomachKeys = allKeys.filter(nameLooksLikeStomach);
 function showStomachOnly() {
   if (!model_container || Object.keys(model_container).length === 0) {
     // still try scene-based discovery
@@ -1143,31 +1098,20 @@ function showStomachOnly() {
     if (alts.length === 0) return false;
   }
 
-  if (stomachKeys.length === 0) {
   const stomachObjs = resolveStomachObjects();
   if (stomachObjs.length === 0) {
     onClickShowAll();
     const log = document.getElementById('log');
-    if (log) log.textContent = 'Stomach not found — check Camelid.js names/aliases.';
     if (log) log.textContent = 'Stomach not found — ensure the GLB (or its root node) is named "stomach".';
     return false;
   }
 
-  // Hide ALL parts
-  allKeys.forEach((key) => {
   // Hide ALL parts we know about
   Object.keys(model_container).forEach((key) => {
     const comp = model_container[key];
     if (comp && comp.object) setVisibleDeep(comp.object, false);
   });
 
-  // Show ONLY the stomach parts + ensure full opacity
-  stomachKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) {
-      setVisibleDeep(comp.object, true);
-      setMaterialStateDeep(comp.object, false, 1.0);
-    }
   // Also try to hide any other top-level children if your app uses `scene` directly
   if (typeof scene !== 'undefined' && scene) {
     scene.children.forEach(ch => {
@@ -1184,11 +1128,24 @@ function showStomachOnly() {
   });
 
   return true;
-@@ -1121,43 +1146,42 @@ function onClickChangeView(e) {
+}
+
+function onClickChangeView(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
+
+  if (!__showingStomachOnly) {
+    const ok = showStomachOnly();
+    if (ok !== false) {
+      __showingStomachOnly = true;
+      $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
+    }
+  } else {
+    // Restore ALL parts visible
+    Object.keys(model_container).forEach((key) => {
       const comp = model_container[key];
       if (comp && comp.object) setVisibleDeep(comp.object, true);
     });
-    // Use your existing reset to restore transparencies, selections, etc.
     onClickShowAll();
 
     __showingStomachOnly = false;
@@ -1196,19 +1153,7 @@ function showStomachOnly() {
   }
 }
 
-
 function onClickShowAll() {
-
-    // Check if we are hiding
-    if (FOCUS_MODE) {
-        return;
-    }
-    else if (SELECTED_BONES) {
-        let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
-
-        if (current_mesh.material.transparent) {
-            onClickHide();
-        }
   // Check if we are hiding
   if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) {
     return;
@@ -1219,13 +1164,6 @@ function onClickShowAll() {
     }
   }
 
-    for(const model in model_container){
-        model_container[model].object.parent.traverse( function(object) {
-            if(object.type == 'Mesh'){
-                object.material.transparent = false;
-            }
-        });
-    }
   for (const model in model_container) {
     model_container[model].object.parent.traverse(function (object) {
       if (object.type === 'Mesh') {
@@ -1236,12 +1174,6 @@ function onClickShowAll() {
     });
   }
 
-    // Also now clear the bones list hiddens
-    model_components.forEach(c=>{
-        c.getElementsByTagName("div")[0].classList.remove("eye-closed");
-    })
-    $('#focus-toggle').removeClass('sidebar-button-active');
-    $('#hide-toggle').removeClass('sidebar-button-active');
   // Clear the bones list hiddens
   if (typeof model_components !== 'undefined') {
     model_components.forEach(c => {
@@ -1251,7 +1183,6 @@ function onClickShowAll() {
   $('#focus-toggle').removeClass('sidebar-button-active');
   $('#hide-toggle').removeClass('sidebar-button-active');
 }
-
 
 // GUI Web Controls (unused for now, may do later)
 function createGUIWebControls() {
