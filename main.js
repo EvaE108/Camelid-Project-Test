@@ -1009,6 +1009,7 @@ function onClickFocus() {
     if (IN_XR || DEMO_XR_IN_WEB)
         xr_controls_ui.focus.update();
 }
+
 function onClickHide() {
 
     // Don't work if focus mode
@@ -1041,22 +1042,13 @@ function onClickHide() {
 
 }
 
-// ===== Change View: Full Model <-> Stomach Only =====
-let __showingStomachOnly = false;
+//Start of added code
 
-// Keep aliases minimal unless you want intestines too.
-const STOMACH_ALIASES = ['stomach'];
-
-function nameLooksLikeStomach(name) {
-  const n = (name || '').toLowerCase();
-  return STOMACH_ALIASES.some(a => n.includes(a));
-}
-
-// Set transparency/opacity on all meshes under a node
-function setMaterialStateDeep(rootObj, transparent, opacity) {
+// Helper: set transparent/opacity on ALL meshes under a node (like your hide)
+function setTransparencyDeep(rootObj, transparent, opacity) {
   if (!rootObj) return;
   rootObj.traverse((object) => {
-    if (object.isMesh) {
+    if (object.type === 'Mesh' || object.isMesh) {
       const apply = (m) => {
         if (!m) return;
         m.transparent = !!transparent;
@@ -1069,12 +1061,7 @@ function setMaterialStateDeep(rootObj, transparent, opacity) {
   });
 }
 
-// Show/hide an object and all its children
-function setVisibleDeep(rootObj, vis) {
-  if (!rootObj) return;
-  rootObj.traverse(o => { o.visible = vis; });
-}
-
+// Show ONLY stomach by fading everything else (DON'T use .visible)
 function showStomachOnly() {
   if (!model_container || Object.keys(model_container).length === 0) return false;
 
@@ -1088,27 +1075,31 @@ function showStomachOnly() {
     return false;
   }
 
-  // Hide ALL parts
+  // First: fade ALL parts (like hide)
   allKeys.forEach((key) => {
     const comp = model_container[key];
-    if (comp && comp.object) setVisibleDeep(comp.object, false);
-  });
-
-  // Show ONLY the stomach parts + ensure full opacity
-  stomachKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) {
-      setVisibleDeep(comp.object, true);
-      setMaterialStateDeep(comp.object, false, 1.0);
+    if (comp && comp.object && comp.object.parent) {
+      // match your onClickShowAll traversal root (parent.traverse)
+      setTransparencyDeep(comp.object.parent, true, 0.2);
     }
   });
 
+  // Then: make ONLY the stomach fully opaque
+  stomachKeys.forEach((key) => {
+    const comp = model_container[key];
+    if (comp && comp.object && comp.object.parent) {
+      setTransparencyDeep(comp.object.parent, false, 1.0);
+    }
+  });
+
+  // UI affordances to match your other toggles
+  $('#hide-toggle').addClass('sidebar-button-active');
   return true;
 }
 
 function onClickChangeView(e) {
   if (e && e.preventDefault) e.preventDefault();
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return;
 
   if (!__showingStomachOnly) {
     const ok = showStomachOnly();
@@ -1117,49 +1108,38 @@ function onClickChangeView(e) {
       $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
     }
   } else {
-    // Restore ALL parts visible
-    Object.keys(model_container).forEach((key) => {
+    // Restore original transparency state everywhere (like your onClickShowAll)
+    for (const key in model_container) {
       const comp = model_container[key];
-      if (comp && comp.object) setVisibleDeep(comp.object, true);
-    });
-    // Use your existing reset to restore transparencies, selections, etc.
-    onClickShowAll();
+      if (comp && comp.object && comp.object.parent) {
+        comp.object.parent.traverse(function (object) {
+          if (object.type === 'Mesh' || object.isMesh) {
+            if (Array.isArray(object.material)) {
+              object.material.forEach(m => {
+                if (!m) return;
+                m.transparent = false;
+                m.opacity = 1.0;
+                m.needsUpdate = true;
+              });
+            } else if (object.material) {
+              object.material.transparent = false;
+              object.material.opacity = 1.0;
+              object.material.needsUpdate = true;
+            }
+          }
+        });
+      }
+    }
+
+    onClickShowAll(); // keep your existing reset logic
 
     __showingStomachOnly = false;
     $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
+    $('#hide-toggle').removeClass('sidebar-button-active');
   }
 }
 
-
-function onClickShowAll() {
-
-    // Check if we are hiding
-    if (FOCUS_MODE) {
-        return;
-    }
-    else if (SELECTED_BONES) {
-        let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
-
-        if (current_mesh.material.transparent) {
-            onClickHide();
-        }
-    }
-
-    for(const model in model_container){
-        model_container[model].object.parent.traverse( function(object) {
-            if(object.type == 'Mesh'){
-                object.material.transparent = false;
-            }
-        });
-    }
-
-    // Also now clear the bones list hiddens
-    model_components.forEach(c=>{
-        c.getElementsByTagName("div")[0].classList.remove("eye-closed");
-    })
-    $('#focus-toggle').removeClass('sidebar-button-active');
-    $('#hide-toggle').removeClass('sidebar-button-active');
-}
+//End of added code
 
 // GUI Web Controls (unused for now, may do later)
 function createGUIWebControls() {
