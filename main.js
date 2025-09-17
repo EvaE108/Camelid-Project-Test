@@ -1040,125 +1040,136 @@ function onClickHide() {
 
 }
 
-// ===== Change View: Full Model <-> Stomach Only =====
-let __showingStomachOnly = false;
+//Start of added code
 
-// Keep aliases minimal unless you want intestines too.
-const STOMACH_ALIASES = ['stomach'];
+const VIEWS = {
+  skull:   ['Skull'],    // <-- Use your exact group names
+  stomach: ['Stomach']   // <-- Use your exact group names
+};
+let CURRENT_VIEW = 'skull';
 
-function nameLooksLikeStomach(name) {
-  const n = (name || '').toLowerCase();
-  return STOMACH_ALIASES.some(a => n.includes(a));
-}
+// Precompute union so we only touch known view groups
+const ALL_VIEW_BONES = [...new Set([...VIEWS.skull, ...VIEWS.stomach])];
 
-// Set transparency/opacity on all meshes under a node
-function setMaterialStateDeep(rootObj, transparent, opacity) {
-  if (!rootObj) return;
-  rootObj.traverse((object) => {
-    if (object.isMesh) {
-      const apply = (m) => {
-        if (!m) return;
-        m.transparent = !!transparent;
-        if (typeof opacity === 'number') m.opacity = opacity;
-        m.needsUpdate = true;
-      };
-      if (Array.isArray(object.material)) object.material.forEach(apply);
-      else apply(object.material);
-    }
-  });
-}
+// ---- Utils ----
 
-// Show/hide an object and all its children
-function setVisibleDeep(rootObj, vis) {
-  if (!rootObj) return;
-  rootObj.traverse(o => { o.visible = vis; });
-}
-
-function showStomachOnly() {
-  if (!model_container || Object.keys(model_container).length === 0) return false;
-
-  const allKeys = Object.keys(model_container);
-  const stomachKeys = allKeys.filter(nameLooksLikeStomach);
-
-  if (stomachKeys.length === 0) {
-    onClickShowAll();
-    const log = document.getElementById('log');
-    if (log) log.textContent = 'Stomach not found — check Camelid.js names/aliases.';
-    return false;
+// Safe lookup by name; assumes a global THREE.Scene named `scene`
+function getGroupByName(name) {
+  if (typeof scene !== 'undefined' && scene?.getObjectByName) {
+    return scene.getObjectByName(name) || null;
   }
-
-  // Hide ALL parts
-  allKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) setVisibleDeep(comp.object, false);
-  });
-
-  // Show ONLY the stomach parts + ensure full opacity
-  stomachKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) {
-      setVisibleDeep(comp.object, true);
-      setMaterialStateDeep(comp.object, false, 1.0);
-    }
-  });
-
-  return true;
+  console.warn('[getGroupByName] scene not available; returning null for', name);
+  return null;
 }
 
-function onClickChangeView(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
-
-  if (!__showingStomachOnly) {
-    const ok = showStomachOnly();
-    if (ok !== false) {
-      __showingStomachOnly = true;
-      $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
+// Ensures deterministic visibility via opacity (matches your existing UI)
+function setMeshOpacity(mesh, alpha) {
+  // WHY: Clone shared materials to avoid side effects across meshes
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  for (let i = 0; i < mats.length; i++) {
+    const m = mats[i];
+    if (!m) continue;
+    if (m.userData?.__clonedForOpacity !== true && (m.opacity !== alpha)) {
+      mesh.material = (i === 0 && !Array.isArray(mesh.material))
+        ? m.clone()
+        : (Array.isArray(mesh.material)
+            ? [...mesh.material.slice(0, i), m.clone(), ...mesh.material.slice(i + 1)]
+            : m.clone());
+      const mm = Array.isArray(mesh.material) ? mesh.material[i] : mesh.material;
+      mm.userData.__clonedForOpacity = true;
     }
-  } else {
-    // Restore ALL parts visible
-    Object.keys(model_container).forEach((key) => {
-      const comp = model_container[key];
-      if (comp && comp.object) setVisibleDeep(comp.object, true);
-    });
-    // Use your existing reset to restore transparencies, selections, etc.
-    onClickShowAll();
+  }
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  materials.forEach(mm => {
+    mm.transparent = alpha < 1.0;
+    mm.opacity = alpha;
+    mm.depthWrite = alpha === 1.0; // WHY: avoid sorting artifacts when semi-transparent
+    mm.needsUpdate = true;
+  });
+}
 
-    __showingStomachOnly = false;
-    $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
+function setGroupOpacity(group, alpha) {
+  if (!group) return;
+  group.traverse(obj => {
+    if (obj.isMesh) setMeshOpacity(obj, alpha);
+  });
+}
+
+// Force eye icon state in the sidebar for a specific bone name
+function setEyeClosed(name, isClosed) {
+  if (!Array.isArray(model_components)) return;
+  for (const c of model_components) {
+    const span = c.getElementsByTagName('span')[0];
+    if (!span) continue;
+    if (span.innerText === name) {
+      const iconDiv = c.getElementsByTagName('div')[0];
+      if (iconDiv) iconDiv.classList.toggle('eye-closed', Boolean(isClosed));
+      break;
+    }
   }
 }
 
+// Apply a logical "view" (hide others -> show target)
+function applyView(viewName) {
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return;
 
-function onClickShowAll() {
+  const targetSet = new Set(VIEWS[viewName] || []);
+  // Hide everything involved in defined views
+  ALL_VIEW_BONES.forEach(name => {
+    const group = getGroupByName(name);
+    setGroupOpacity(group, 0.2);
+    setEyeClosed(name, true);
+  });
 
-    // Check if we are hiding
-    if (FOCUS_MODE) {
+  // Show the target view bones
+  targetSet.forEach(name => {
+    const group = getGroupByName(name);
+    setGroupOpacity(group, 1.0);
+    setEyeClosed(name, false);
+  });
+
+  CURRENT_VIEW = viewName;
+}
+
+// Click handler for "Change View" button
+function onClickChangeView() {
+  const next = CURRENT_VIEW === 'skull' ? 'stomach' : 'skull';
+  applyView(next);
+  // Optional UI affordance
+  const btn = document.getElementById('change-view');
+  if (btn) btn.classList.toggle('sidebar-button-active');
+  // If you prefer jQuery like existing code:
+  // $('#change-view').toggleClass('sidebar-button-active');
+}
+
+// ---- Wire up ----
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('change-view');
+  if (btn) btn.addEventListener('click', onClickChangeView);
+
+  // Optional: initialize default view once the scene is ready
+  applyView(CURRENT_VIEW);
+});
+
+// ---- Existing (from your snippet) remains as-is ----
+function onClickHide() {
+  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return;
+  if (SELECTED) {
+    const mesh = getMeshFromBoneGroup(SELECTED_BONES);
+    mesh.material.transparent = !mesh.material.transparent;
+    if (mesh.material.opacity == 1.0) mesh.material.opacity = .2;
+    else mesh.material.opacity = 1.0;
+
+    model_components.forEach(c => {
+      if (c.getElementsByTagName('span')[0].innerText == SELECTED_BONES.name) {
+        c.getElementsByTagName('div')[0].classList.toggle('eye-closed');
         return;
-    }
-    else if (SELECTED_BONES) {
-        let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
-
-        if (current_mesh.material.transparent) {
-            onClickHide();
-        }
-    }
-
-    for(const model in model_container){
-        model_container[model].object.parent.traverse( function(object) {
-            if(object.type == 'Mesh'){
-                object.material.transparent = false;
-            }
-        });
-    }
-
-    // Also now clear the bones list hiddens
-    model_components.forEach(c=>{
-        c.getElementsByTagName("div")[0].classList.remove("eye-closed");
-    })
-    $('#focus-toggle').removeClass('sidebar-button-active');
-    $('#hide-toggle').removeClass('sidebar-button-active');
+      }
+    });
+    $('#hide-toggle').toggleClass('sidebar-button-active');
+  }
 }
+//End of added code
 
 // GUI Web Controls (unused for now, may do later)
 function createGUIWebControls() {
