@@ -1046,7 +1046,7 @@ function onClickHide() {
 let __showingStomachOnly = false;
 
 // Keep aliases minimal unless you want intestines too.
-const STOMACH_ALIASES = ['stomach'];
+const STOMACH_ALIASES = ['stomach2'];
 
 function nameLooksLikeStomach(name) {
   const n = (name || '').toLowerCase();
