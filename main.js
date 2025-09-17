@@ -1042,126 +1042,37 @@ function onClickHide() {
 
 //Start of added code
 
-// ===== Change View: Full Model <-> Stomach Only =====
-let __showingStomachOnly = false;
+// FILE: main.js  (drop-in additions + 1 replacement)
 
-// Keep aliases minimal unless you want intestines too.
-const STOMACH_ALIASES = ['stomach2'];
+// 1) ADD: show/hide + bind Change View only for Camelid
+function updateChangeViewButtonForAnimal() {
+  const btn = document.getElementById('change-view');
+  if (!btn) return;
 
-function nameLooksLikeStomach(name) {
-  const n = (name || '').toLowerCase();
-  return STOMACH_ALIASES.some(a => n.includes(a));
-}
+  const isCamelid = !!(window.selected_model && selected_model.name === 'Camelid');
 
-// Set transparency/opacity on all meshes under a node
-function setMaterialStateDeep(rootObj, transparent, opacity) {
-  if (!rootObj) return;
-  rootObj.traverse((object) => {
-    if (object.isMesh) {
-      const apply = (m) => {
-        if (!m) return;
-        m.transparent = !!transparent;
-        if (typeof opacity === 'number') m.opacity = opacity;
-        m.needsUpdate = true;
-      };
-      if (Array.isArray(object.material)) object.material.forEach(apply);
-      else apply(object.material);
-    }
-  });
-}
+  // Always unbind first to avoid duplicate listeners across model switches
+  $('#change-view').off('click');
 
-// Show/hide an object and all its children
-function setVisibleDeep(rootObj, vis) {
-  if (!rootObj) return;
-  rootObj.traverse(o => { o.visible = vis; });
-}
+  if (isCamelid) {
+    btn.hidden = false;
+    $('#change-view').on('click', onClickChangeView);
 
-function showStomachOnly() {
-  if (!model_container || Object.keys(model_container).length === 0) return false;
-
-  const allKeys = Object.keys(model_container);
-  const stomachKeys = allKeys.filter(nameLooksLikeStomach);
-
-  if (stomachKeys.length === 0) {
-    onClickShowAll();
-    const log = document.getElementById('log');
-    if (log) log.textContent = 'Stomach not found — check Camelid.js names/aliases.';
-    return false;
-  }
-
-  // Hide ALL parts
-  allKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) setVisibleDeep(comp.object, false);
-  });
-
-  // Show ONLY the stomach parts + ensure full opacity
-  stomachKeys.forEach((key) => {
-    const comp = model_container[key];
-    if (comp && comp.object) {
-      setVisibleDeep(comp.object, true);
-      setMaterialStateDeep(comp.object, false, 1.0);
-    }
-  });
-
-  return true;
-}
-
-function onClickChangeView(e) {
-  if (e && e.preventDefault) e.preventDefault();
-  if (typeof FOCUS_MODE !== 'undefined' && FOCUS_MODE) return; // avoid conflict with Focus mode
-
-  if (!__showingStomachOnly) {
-    const ok = showStomachOnly();
-    if (ok !== false) {
-      __showingStomachOnly = true;
+    // Keep label/state consistent if user returns to Camelid
+    if (window.__showingStomachOnly) {
       $('#change-view').addClass('sidebar-button-active').text('Change View (Full Model)');
+    } else {
+      $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
     }
   } else {
-    // Restore ALL parts visible
-    Object.keys(model_container).forEach((key) => {
-      const comp = model_container[key];
-      if (comp && comp.object) setVisibleDeep(comp.object, true);
-    });
-    // Use your existing reset to restore transparencies, selections, etc.
-    onClickShowAll();
-
-    __showingStomachOnly = false;
-    $('#change-view').removeClass('sidebar-button-active').text('Change View (Stomach Only)');
+    // WHY: Prevent Stomach-only state leaking into other animals
+    if (window.__showingStomachOnly) {
+      window.__showingStomachOnly = false;
+      try { onClickShowAll(); } catch (_) {}
+    }
+    btn.hidden = true;
   }
 }
-
-
-function onClickShowAll() {
-
-    // Check if we are hiding
-    if (FOCUS_MODE) {
-        return;
-    }
-    else if (SELECTED_BONES) {
-        let current_mesh = getMeshFromBoneGroup(SELECTED_BONES);
-
-        if (current_mesh.material.transparent) {
-            onClickHide();
-        }
-    }
-
-    for(const model in model_container){
-        model_container[model].object.parent.traverse( function(object) {
-            if(object.type == 'Mesh'){
-                object.material.transparent = false;
-            }
-        });
-    }
-
-    // Also now clear the bones list hiddens
-    model_components.forEach(c=>{
-        c.getElementsByTagName("div")[0].classList.remove("eye-closed");
-    })
-    $('#focus-toggle').removeClass('sidebar-button-active');
-    $('#hide-toggle').removeClass('sidebar-button-active');
-}
-
 
 //End of added code
 
