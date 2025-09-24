@@ -183,18 +183,7 @@ window.addEventListener("resize", rs);
 rs();
 
 //Added code to only show change view in Camelid
-function updateChangeViewButtonFor(modelObj, modelKey) {
-  const key = (modelKey || "").toLowerCase();
-  const text = (modelObj?.modelInfo || modelObj?.name || "").toLowerCase();
-  const isCamelid = key.includes("camelid") || text.includes("camelid");
 
-  const btn = document.getElementById("change-view");
-  if (!btn) return;
-
-  btn.hidden = !isCamelid;      // only show for Camelid
-  // Optional: debug
-  // console.log("Change View visible?", !btn.hidden, { key, text });
-}
 //End of added code
 
 // Go to loading screen
@@ -243,14 +232,14 @@ $(document).ready(function(){
                 selected_model = modelObj;
 
 				//Added code: only show change view for Camelid
-				updateChangeViewButtonFor(modelObj, model);
+				
 				
                 await init();
 
                 // show the page
                 navigate("vr_explorer");
 
-				updateChangeViewButtonFor(modelObj, model);
+				
             });
         }
 
