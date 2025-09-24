@@ -182,6 +182,14 @@ function rs (e) {
 window.addEventListener("resize", rs);
 rs();
 
+//Added code to only show change view in Camelid
+function updateChangeViewButtonFor(modelKey) {
+  const isCamelid = (modelKey || "").toLowerCase().includes("camelid");
+  const btn = document.getElementById("change-view");
+  if (btn) btn.hidden = !isCamelid;   // show only for Camelid
+}
+//End of added code
+
 // Go to loading screen
 navigate("loading");
 
@@ -226,6 +234,10 @@ $(document).ready(function(){
 
                 // Initialize
                 selected_model = modelObj;
+
+				//Added code: only show change view for Camelid
+				updateChangeViewButtonFor(model);
+				
                 await init();
 
                 // show the page
