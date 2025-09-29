@@ -1,7 +1,7 @@
 import {Model} from "./models.js";
 
 let bonesList = [
-    'Parts/Skull',
+    'Parts/Minion',
     'Parts/potato',
     'Parts/Stomach2',
 ];
